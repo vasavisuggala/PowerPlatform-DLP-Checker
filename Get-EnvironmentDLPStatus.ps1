@@ -1,54 +1,61 @@
-# Load Power Platform Admin module  
-Import-Module Microsoft.PowerApps.Administration.PowerShell  
-  
-# Login to Power Platform  
-Add-PowerAppsAccount  
-  
-# Get all environments  
-$environments = Get-AdminPowerAppEnvironment  
-  
-# Get all DLP policies  
-$dlpPolicies = Get-AdminDlpPolicy  
-  
-# Prepare result array  
-$result = @()  
-  
-# Loop through environments  
-foreach ($env in $environments) {  
-    $envName = $env.DisplayName  
-    $envId   = $env.EnvironmentName  
-  
-    # Find DLP policy assigned to this environment
-    $dlpPolicy = $dlpPolicies | Where-Object {  
-        $_.Environments.EnvironmentName -contains $envId  
-    }  
-  
-    if ($dlpPolicy) {  
-        $dlpName = $dlpPolicy.DisplayName
-        $dlpStatus = "✅ DLP Policy Assigned"
-    } else {  
-        $dlpName = "N/A"  
-        $dlpStatus = "❌ No DLP Policy"
-    }  
-  
-    # Add to result array  
-    $result += [PSCustomObject]@{  
-        EnvironmentName = $envName  
-        EnvironmentID   = $envId  
-        DLPPolicyName   = $dlpName  
-        DLPPolicyStatus = $dlpStatus
-    }  
-}  
-  
-# Export results to CSV  
-$exportPath = "C:\AllEnvironments-DLP-Policies.csv"  
-$result | Export-Csv -Path $exportPath -NoTypeInformation -Encoding UTF8  
-  
-Write-Host "✅ Exported all environments with their DLP policy and status to $exportPath"  
+# ---------------------------------------------
+# Power Platform Environment DLP Status Checker
+# ---------------------------------------------
+# Author    : Vasavi Suggala
+# Version   : 1.1
+# Purpose   : Export all environments with their DLP policies
+# Output    : C:\Users\<User>\Downloads\Policy.csv
+# ---------------------------------------------
 
+# Load Power Platform Admin module
+Import-Module Microsoft.PowerApps.Administration.PowerShell
 
-# Export results to CSV
-$exportPath = "C:\AllEnvironments-DLP-Status.csv"
-$result | Export-Csv -Path $exportPath -NoTypeInformation -Encoding UTF8
+# Login to Power Platform
+Add-PowerAppsAccount
 
-Write-Host "✅ Exported all environments with DLP status to $exportPath" idhi GitHub lo pedatha 
+# Get all environments
+$allEnvironments = Get-AdminPowerAppEnvironment
+Write-Host "🌐 Total Environments Fetched: $($allEnvironments.Count)"
+
+# Get all DLP policies
+$dlpPolicies = @(Get-DlpPolicy | ForEach-Object { $_.PSObject.Properties.Value })
+Write-Host "📄 Total DLP Policies Fetched: $($dlpPolicies.Count)"
+
+# Prepare array for export
+$results = @()
+
+foreach ($env in $allEnvironments) {
+    $envName = $env.DisplayName
+    $envGUID = $env.EnvironmentName  # GUID
+
+    # Default status
+    $dlpPolicyName = "N/A"
+    $dlpPolicyID   = "N/A"
+    $dlpStatus     = "❌ No DLP Policy Assigned"
+
+    # Check if environment GUID exists in any DLP policy
+    foreach ($policy in $dlpPolicies) {
+        $policyEnvGuids = $policy.environments.name
+        if ($policyEnvGuids -contains $envGUID) {
+            $dlpPolicyName = $policy.DisplayName
+            $dlpPolicyID   = $policy.PolicyName
+            $dlpStatus     = "✅ DLP Policy Assigned"
+            break
+        }
+    }
+
+    # Add to results
+    $results += [PSCustomObject]@{
+        EnvironmentName  = $envName
+        EnvironmentGUID  = $envGUID
+        DLPPolicyName    = ($dlpPolicyName -join ", ")
+        DLPPolicyID      = $dlpPolicyID
+        DLPPolicyStatus  = $dlpStatus
+    }
+}
+# Export to CSV
+$exportPath = "C:\Users\<YourUsername>\Downloads\Policy.csv"
+$results | Export-Csv -Path $exportPath -NoTypeInformation -Encoding UTF8
+
+Write-Host "`n✅ Exported all environments with their DLP policies to $exportPath" -ForegroundColor Green
+
